@@ -432,8 +432,8 @@
           setBlinkClass(countdownEl, 'blink-fast', 'rgb(207,16,32)');
         } else if (deltaSecs <= 15 * 60) {
           countdownEl.textContent = `in ${formatDeltaSecs(deltaSecs)}`;
-          setBlinkClass(nextEl,    'blink-slow', 'rgb(255,140,0)');
-          setBlinkClass(countdownEl, 'blink-slow', 'rgb(255,140,0)');
+          setBlinkClass(nextEl,    'blink-slow', 'rgb(255,192,203)');
+          setBlinkClass(countdownEl, 'blink-slow', 'rgb(255,192,203)');
         } else {
           countdownEl.textContent = `in ${formatDeltaSecs(deltaSecs)}`;
           setBlinkClass(nextEl,    null, '#fff');
