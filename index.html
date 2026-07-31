@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mailboat Schedule</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+    :root {
+      --navy:   #1a2b3c;
+      --ocean:  #2a5f8f;
+      --foam:   #e8f4f8;
+      --slate:  #4a6a80;
+      --sand:   #f5f0e8;
+      --alert:  #c0392b;
+      --gold:   #d4a843;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--navy);
+      color: var(--foam);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+    }
+
+    /* Wave header */
+    header {
+      background: var(--ocean);
+      padding: 2rem 1.5rem 3.5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0; right: 0;
+      height: 40px;
+      background: var(--navy);
+      clip-path: ellipse(55% 100% at 50% 100%);
+    }
+    header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.6rem, 5vw, 2.6rem);
+      letter-spacing: 0.02em;
+      color: #fff;
+    }
+    header p {
+      margin-top: 0.4rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: 0.9;
+    }
+
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    /* ── NEXT DEPARTURE CARD ── */
+    #next-card {
+      background: var(--ocean);
+      border: 2px solid var(--gold);
+      border-radius: 6px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .next-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.25rem;
+    }
+    /* Time + countdown on one line */
+    #time-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      line-height: 1;
+    }
+    #next-time {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 6vw, 2.8rem);
+      color: #fff;
+    }
+    #next-countdown {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 6vw, 2.8rem);
+      color: #fff;
+    }
+    #next-detail {
+      font-size: 1.5rem;
+      color: var(--foam);
+      margin-top: 0.3rem;
+      opacity: 0.85;
+    }
+
+    /* Blink animations — slow (15→5 min) and fast (<5 min) */
+    @keyframes blink-slow  { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes blink-fast  { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes blink-grace { 0%,100%{opacity:1} 50%{opacity:0} }
+    .blink-slow  { animation: blink-slow  5s    step-start infinite; }
+    .blink-fast  { animation: blink-fast  3s  step-start infinite; }
+    .blink-grace { animation: blink-grace 1s step-start infinite; }
+
+    /* No more ferries state */
+    #next-time.done {
+      font-size: 1.1rem;
+      color: var(--gold);
+      animation: none;
+    }
+
+    /* ── TIMETABLE ── */
+    h2.section-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.8rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--slate);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    thead th {
+      text-align: left;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border-bottom: 1px solid var(--slate);
+      position: sticky;
+      top: 0;
+      background: var(--navy);
+      z-index: 1;
+    }
+    tbody tr {
+      border-bottom: 1px solid rgba(74,106,128,0.3);
+      transition: background 0.15s;
+    }
+    tbody tr:hover {
+      background: rgba(42,95,143,0.35);
+    }
+    tbody td {
+      padding: 0.55rem 0.6rem;
+      color: var(--foam);
+    }
+    tbody td:first-child {
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .arrive-row td {
+      color: rgba(211, 211, 211);
+      font-style: italic;
+    }
+
+    /* Highlight the next row */
+    tr.next-row td {
+      background: rgba(212,168,67,0.12);
+      color: #fff;
+    }
+    tr.next-row td:first-child {
+      color: var(--gold);
+    }
+
+    /* Past rows */
+    tr.past-row td {
+      opacity: 0.35;
+    }
+
+    /* White border above first departure row */
+    tr.first-depart-row td {
+      border-top: 1px solid #fff;
+    }
+
+    /* White border below each arrival row */
+    tr.arrive-row td {
+      border-bottom: 1px solid #fff;
+    }
+
+    /* IN column */
+    td.in-col {
+      color: var(--gold);
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    /* Current time display */
+    #clock {
+      text-align: right;
+      font-size: 1.0rem;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    /* ── WEATHER WIDGET ── */
+    #next-card, #weather-card {
+      min-height: 7rem;
+    }
+    #weather-card {
+      background: var(--ocean);
+      border: 2px solid var(--gold);
+      border-radius: 6px;
+      padding: 1.1rem 1.4rem;
+      margin-bottom: 2rem;
+    }
+    #weather-card .next-label {
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #weather-card .next-label span {
+      letter-spacing: 0.18em;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .wx-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+    #weather-hour-select {
+      background: var(--navy);
+      color: var(--gold);
+      border: 1px solid var(--slate);
+      border-radius: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      padding: 0.15rem 0.3rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+    }
+    #weather-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem 1rem;
+    }
+    .wx-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .wx-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--foam);
+      margin-bottom: 0.15rem;
+      opacity: 0.75;
+    }
+    .wx-value {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .wx-value.fog-none    { color: var(--foam); }
+    .wx-value.fog-low     { color: var(--gold); }
+    .wx-value.fog-medium  { color: rgb(255,140,0); }
+    .wx-value.fog-high    { color: rgb(207,16,32); }
+    #weather-window {
+      font-size: 0.65rem;
+      color: var(--foam);
+      margin-top: 0.5rem;
+      font-style: italic;
+      opacity: 0.6;
+    }
+    #weather-error {
+      font-size: 0.75rem;
+      color: var(--foam);
+      font-style: italic;
+      opacity: 0.6;
+    }
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: var(--navy);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #splash h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 8vw, 3.5rem);
+      color: #fff;
+      letter-spacing: 0.02em;
+      text-align: center;
+      padding: 0 2rem;
+    }
+    #splash p {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.4; }
+    }
+    #splash p { animation: pulse 2s ease-in-out infinite; }
+
+    /* Hide main content until unlocked */
+    body.locked header,
+    body.locked main { visibility: hidden; }
+  </style>
+</head>
+<body class="locked">
+
+<div id="splash">
+  <h2>Tap for Schedule</h2>
+  <p>Mailboat · Northeast Harbor</p>
+  <p style="margin-top:1.5rem; font-size:0.65rem; letter-spacing:0.1em; opacity:0.6; animation:none;">🔔 For audio alerts, ensure your iPhone ringer switch is ON</p>
+</div>
+
+<header>
+  <h1>Mailboat (beta v0.14)</h1>
+  <p>Daily Timetable · Northeast Harbor</p>
+</header>
+
+<main>
+  <div id="clock">Current time: --:--</div>
+
+  <div id="next-card">
+    <div>
+      <div class="next-label">Next Departure</div>
+      <div id="time-row">
+        <span id="next-time">--:--</span>
+        <span id="next-countdown"></span>
+      </div>
+      <div id="next-detail">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- ── WEATHER WIDGET ── -->
+  <div id="weather-card">
+    <div class="next-label">
+      <span><span class="wx-icon">⛅</span> Forecast · Cranberry Isles</span>
+      <select id="weather-hour-select">
+        <option value="1" selected>Next 1 hr</option>
+        <option value="2">Next 2 hr</option>
+        <option value="3">Next 3 hr</option>
+        <option value="4">Next 4 hr</option>
+        <option value="5">Next 5 hr</option>
+        <option value="6">Next 6 hr</option>
+      </select>
+    </div>
+    <div id="weather-grid">
+      <div class="wx-item">
+        <div class="wx-label">Wind</div>
+        <div class="wx-value" id="wx-wind">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Temperature</div>
+        <div class="wx-value" id="wx-temp">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Precip. Chance</div>
+        <div class="wx-value" id="wx-precip">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Fog</div>
+        <div class="wx-value" id="wx-fog">—</div>
+      </div>
+    </div>
+    <div id="weather-window"></div>
+    <div id="weather-error"></div>
+  </div>
+
+  <h2 class="section-label">Full Schedule</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Dep/Arr</th>
+        <th>TIMER</th>
+        <th>From</th>
+        <th>To</th>
+      </tr>
+    </thead>
+    <tbody id="schedule-body"></tbody>
+  </table>
+</main>
+
+<script>
+  const schedule = [
+    { time: "7:30am",  type: "Depart", from: "Northeast Harbor", to: "Islesford" },
+    { time: "8:00am",  type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "8:30am",  type: "Depart", from: "Cranberry",        to: "Northeast Harbor" },
+    { time: "8:50am",  type: "Arrive", from: "Northeast Harbor", to: "" },
+    { time: "10:00am", type: "Depart", from: "Northeast Harbor", to: "Cranberry" },
+    { time: "10:25am", type: "Depart", from: "Cranberry",        to: "Islesford" },
+    { time: "10:45am", type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "11:05am", type: "Depart", from: "Cranberry",        to: "Northeast Harbor" },
+    { time: "11:25am", type: "Arrive", from: "Northeast Harbor", to: "" },
+    { time: "12:00pm", type: "Depart", from: "Northeast Harbor", to: "Islesford" },
+    { time: "12:30pm", type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "1:00pm",  type: "Depart", from: "Cranberry",        to: "Islesford" },
+    { time: "1:15pm",  type: "Depart", from: "Islesford",        to: "Northeast Harbor" },
+    { time: "1:45pm",  type: "Arrive", from: "Northeast Harbor", to: "" },
+    { time: "2:00pm",  type: "Depart", from: "Northeast Harbor", to: "Cranberry" },
+    { time: "2:25pm",  type: "Depart", from: "Cranberry",        to: "Islesford" },
+    { time: "2:45pm",  type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "3:05pm",  type: "Depart", from: "Cranberry",        to: "Northeast Harbor" },
+    { time: "3:25pm",  type: "Arrive", from: "Northeast Harbor", to: "" },
+    { time: "4:00pm",  type: "Depart", from: "Northeast Harbor", to: "Cranberry" },
+    { time: "4:25pm",  type: "Depart", from: "Cranberry",        to: "Islesford" },
+    { time: "4:45pm",  type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "5:05pm",  type: "Depart", from: "Cranberry",        to: "Northeast Harbor" },
+    { time: "5:25pm",  type: "Arrive", from: "Northeast Harbor", to: "" },
+    { time: "6:00pm",  type: "Depart", from: "Northeast Harbor", to: "Islesford" },
+    { time: "6:30pm",  type: "Depart", from: "Islesford",        to: "Cranberry" },
+    { time: "6:45pm",  type: "Depart", from: "Cranberry",        to: "Northeast Harbor" },
+    { time: "7:05pm",  type: "Arrive", from: "Northeast Harbor", to: "" },
+  ];
+
+  // Parse "7:30am" → minutes since midnight
+  function parseTime(str) {
+    const m = str.match(/(\d+):(\d+)(am|pm)/i);
+    let h = parseInt(m[1]), min = parseInt(m[2]), period = m[3].toLowerCase();
+    if (period === 'pm' && h !== 12) h += 12;
+    if (period === 'am' && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
+  // Format minutes since midnight → 12h display
+  function nowMinutes() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  function formatClock(d) {
+    let h = d.getHours(), min = d.getMinutes();
+    const ampm = h >= 12 ? 'pm' : 'am';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${String(min).padStart(2,'0')}${ampm}`;
+  }
+
+  // Build table rows
+  const tbody = document.getElementById('schedule-body');
+  const firstDepartIdx = schedule.findIndex(s => s.type === 'Depart');
+  schedule.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    if (row.type === 'Arrive') tr.classList.add('arrive-row');
+    if (i === firstDepartIdx) tr.classList.add('first-depart-row');
+    tr.innerHTML = `
+      <td>${row.time}</td>
+      <td>${row.type}</td>
+      <td class="in-col" id="in-${i}"></td>
+      <td>${row.from}</td>
+      <td>${row.to || '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // nowSeconds(): total seconds since midnight
+  function nowSeconds() {
+    const d = new Date();
+    return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+  }
+
+  function formatDeltaMins(totalMins) {
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+
+  // Format seconds as hh:mm (floor to minutes)
+  function formatDeltaSecs(totalSecs) {
+    const mins = Math.floor(totalSecs / 60);
+    return formatDeltaMins(mins);
+  }
+
+  // Format a schedule time string to add space before am/pm
+  function formatTimeDisplay(timeStr) {
+    return timeStr.replace(/(am|pm)/i, ' $1');
+  }
+
+  // Format seconds as hh:mm:ss
+  function formatDeltaSecsHMS(totalSecs) {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function setBlinkClass(el, blink, color) {
+    el.classList.remove('blink-slow', 'blink-fast', 'blink-grace');
+    el.style.color = color || '#fff';
+    if (blink) el.classList.add(blink);
+  }
+
+  function update() {
+    const nowSecs = nowSeconds();
+    const nowMins = nowSecs / 60;
+    const d = new Date();
+    document.getElementById('clock').textContent = `Current time: ${formatClock(d)}`;
+
+    // Update IN column (minute granularity, positive only)
+    schedule.forEach((row, i) => {
+      const cell = document.getElementById(`in-${i}`);
+      if (!cell) return;
+      const deltaMins = parseTime(row.time) - Math.floor(nowMins);
+      cell.textContent = deltaMins > 0 ? formatDeltaMins(deltaMins) : '';
+    });
+
+    // All departures with seconds
+    const departures = schedule
+      .map((s, i) => ({ ...s, idx: i, secs: parseTime(s.time) * 60 }))
+      .filter(s => s.type === 'Depart');
+
+    const GRACE = 5 * 60; // 5 minutes grace in seconds
+
+    // Find the "active" departure: next upcoming, OR most recent if within grace period
+    let active = null;
+    let isGrace = false;
+
+    // Check if most recent departure is within grace window
+    const recent = [...departures].reverse().find(s => s.secs <= nowSecs);
+    if (recent && (nowSecs - recent.secs) < GRACE) {
+      active = recent;
+      isGrace = true;
+    } else {
+      active = departures.find(s => s.secs > nowSecs) || null;
+      isGrace = false;
+    }
+
+    // Table row styling — treat rows as past only after grace window
+    document.querySelectorAll('#schedule-body tr').forEach(tr => {
+      tr.classList.remove('past-row', 'next-row');
+      const idx = parseInt(tr.dataset.idx);
+      const rowSecs = parseTime(schedule[idx].time) * 60;
+      const gracedOver = isGrace && active && schedule[idx].time === schedule[active.idx].time;
+      if (rowSecs < nowSecs && !gracedOver) {
+        tr.classList.add('past-row');
+      }
+    });
+
+    const nextEl = document.getElementById('next-time');
+    const countdownEl = document.getElementById('next-countdown');
+    const detailEl = document.getElementById('next-detail');
+
+    if (active) {
+      // Highlight active row
+      const activeRow = tbody.querySelector(`tr[data-idx="${active.idx}"]`);
+      if (activeRow) {
+        activeRow.classList.remove('past-row');
+        activeRow.classList.add('next-row');
+      }
+
+      nextEl.textContent = formatTimeDisplay(active.time);
+      nextEl.className = '';
+      nextEl.style.color = '';
+
+      const deltaSecs = active.secs - nowSecs; // negative during grace
+
+      if (isGrace) {
+        const elapsed = nowSecs - active.secs;
+        const elapsedStr = formatDeltaSecsHMS(elapsed);
+        countdownEl.textContent = `+${elapsedStr}`;
+        setBlinkClass(nextEl,    'blink-grace', 'rgb(255, 180, 240)');
+        setBlinkClass(countdownEl, 'blink-grace', 'rgb(255, 180, 240)');
+        detailEl.textContent = `${active.from} → ${active.to}`;
+      } else {
+        if (deltaSecs <= 5 * 60) {
+          countdownEl.textContent = `in ${formatDeltaSecsHMS(deltaSecs)}`;
+          setBlinkClass(nextEl,    'blink-fast', 'rgb(255,180,140)');
+          setBlinkClass(countdownEl, 'blink-fast', 'rgb(255,180,140)');
+        } else if (deltaSecs <= 15 * 60) {
+          countdownEl.textContent = `in ${formatDeltaSecs(deltaSecs)}`;
+          setBlinkClass(nextEl,    'blink-slow', 'rgb(255,140,0)');
+          setBlinkClass(countdownEl, 'blink-slow', 'rgb(255,140,0)');
+        } else {
+          countdownEl.textContent = `in ${formatDeltaSecs(deltaSecs)}`;
+          setBlinkClass(nextEl,    null, '#fff');
+          setBlinkClass(countdownEl, null, '#fff');
+        }
+        detailEl.textContent = `${active.from} → ${active.to}`;
+      }
+    } else {
+      nextEl.textContent = 'No more ferries today';
+      nextEl.className = 'done';
+      countdownEl.textContent = '';
+      countdownEl.className = '';
+      detailEl.textContent = 'Service resumes at 7:30am';
+    }
+  }
+
+  update();
+  setInterval(update, 1000); // refresh every second for live countdown
+
+  // ── AUDIO UNLOCK ──
+  // Key iOS Safari fixes:
+  // 1. Use 'mousedown' not 'click' — iOS only grants user-activation to mousedown/keydown/pointerdown
+  // 2. Call audioCtx.resume() before EVERY sound — iOS can silently re-suspend the context
+  // 3. Web Audio API is BLOCKED by iOS hardware mute/ringer switch — nothing can override this
+  //    The user must ensure their iPhone ringer switch is ON (not in silent/vibrate mode)
+  let audioCtx = null;
+
+  function ensureAudio() {
+    // Create context if needed
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // Always resume — iOS can suspend it between sounds
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      return audioCtx.resume();
+    }
+    return Promise.resolve();
+  }
+
+  // Use pointerdown which qualifies as a user-activation gesture on iOS Safari
+  document.getElementById('splash').addEventListener('pointerdown', () => {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Play a silent buffer immediately in the gesture handler to fully unlock
+      audioCtx.resume().then(() => {
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+      });
+    } catch(e) {}
+
+    // Reveal schedule
+    document.body.classList.remove('locked');
+    document.getElementById('splash').style.display = 'none';
+  });
+
+  // ── BOSUN'S PIPE (5-min and 4-min warnings) ──
+  const soundFired = new Set();
+
+  function playBosunPipe() {
+    ensureAudio().then(() => {
+      try {
+        const ctx = audioCtx;
+        const calls = [
+          { freq: 1400, endFreq: 2100, start: 0.00, dur: 0.35, vol: 0.5 },
+          { freq: 2100, endFreq: 2100, start: 0.35, dur: 0.60, vol: 0.6 },
+          { freq: 2100, endFreq: 800,  start: 0.95, dur: 0.40, vol: 0.5 },
+          { freq: 1200, endFreq: 1600, start: 1.40, dur: 0.15, vol: 0.4 },
+          { freq: 900,  endFreq: 1300, start: 1.57, dur: 0.15, vol: 0.4 },
+          { freq: 1200, endFreq: 1600, start: 1.74, dur: 0.15, vol: 0.4 },
+        ];
+        calls.forEach(({ freq, endFreq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+          osc.frequency.linearRampToValueAtTime(endFreq, ctx.currentTime + start + dur);
+          gain.gain.setValueAtTime(0, ctx.currentTime + start);
+          gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
+          gain.gain.setValueAtTime(vol, ctx.currentTime + start + dur - 0.02);
+          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur);
+        });
+      } catch(e) {}
+    }).catch(() => {});
+  }
+
+  setInterval(() => {
+    const nowSecs = nowSeconds();
+    schedule.forEach((row, i) => {
+      if (row.type !== 'Depart') return;
+      const depSecs = parseTime(row.time) * 60;
+      const secsUntil = depSecs - nowSecs;
+      if (secsUntil <= 300 && secsUntil > 298 && !soundFired.has(`${i}-5min`)) {
+        soundFired.add(`${i}-5min`);
+        playBosunPipe();
+      }
+      if (secsUntil <= 240 && secsUntil > 238 && !soundFired.has(`${i}-4min`)) {
+        soundFired.add(`${i}-4min`);
+        playBosunPipe();
+      }
+    });
+  }, 1000);
+
+  // ── 300 HZ DEPARTURE TONE AT 00:00 ──
+  function playDepartureTone() {
+    ensureAudio().then(() => {
+      try {
+        const ctx = audioCtx;
+        function burst(startTime, duration) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = 300;
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.5, startTime + 0.05);
+          gain.gain.setValueAtTime(0.5, startTime + duration - 0.05);
+          gain.gain.linearRampToValueAtTime(0, startTime + duration);
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        }
+        const t = ctx.currentTime;
+        burst(t, 10);
+        burst(t + 15, 10);
+      } catch(e) {}
+    }).catch(() => {});
+  }
+
+  const hornFired = new Set();
+  setInterval(() => {
+    const nowSecs = nowSeconds();
+    schedule.forEach((row, i) => {
+      if (row.type !== 'Depart') return;
+      const depSecs = parseTime(row.time) * 60;
+      const secsUntil = depSecs - nowSecs;
+      if (secsUntil <= 0 && secsUntil > -2 && !hornFired.has(i)) {
+        hornFired.add(i);
+        playDepartureTone();
+      }
+    });
+  }, 1000);
+
+  // ── WEATHER WIDGET ──
+  // Lat/lon for ZIP 04625 (Cranberry Isles, ME)
+  const WX_LAT = 44.2471;
+  const WX_LON = -68.2586;
+  let wxHourlyPeriods = null;   // cached hourly periods from NOAA
+  let wxGridUrl = null;         // cached gridpoints hourly URL
+
+  function degToCompass(deg) {
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  function fogFromShortForecast(text) {
+    if (!text) return { label: 'None', cls: 'fog-none' };
+    const t = text.toLowerCase();
+    if (t.includes('dense fog') || t.includes('widespread fog')) return { label: 'Widespread', cls: 'fog-high' };
+    if (t.includes('patchy fog'))   return { label: 'Patchy',     cls: 'fog-medium' };
+    if (t.includes('fog'))          return { label: 'Isolated',   cls: 'fog-low' };
+    return { label: 'None', cls: 'fog-none' };
+  }
+
+  function renderWeather(hours) {
+    const periods = wxHourlyPeriods;
+    if (!periods) return;
+
+    const now = new Date();
+    // Find periods that fall within the next `hours` hours
+    const cutoff = new Date(now.getTime() + hours * 3600 * 1000);
+    const relevant = periods.filter(p => {
+      const start = new Date(p.startTime);
+      return start >= now && start < cutoff;
+    });
+
+    if (relevant.length === 0) {
+      document.getElementById('weather-error').textContent = 'No forecast data for this window.';
+      return;
+    }
+    document.getElementById('weather-error').textContent = '';
+
+    // Aggregate across the window
+    const temps = relevant.map(p => p.temperature);
+    const avgTemp = Math.round(temps.reduce((a,b) => a+b, 0) / temps.length);
+    const winds = relevant.map(p => p.windSpeed.match(/\d+/g).map(Number));
+    const maxWind = Math.max(...winds.flat());
+    const windDir = relevant[0].windDirection; // direction of first period
+    const precips = relevant.map(p => p.probabilityOfPrecipitation?.value ?? 0);
+    const maxPrecip = Math.max(...precips);
+    const fogEntries = relevant.map(p => fogFromShortForecast(p.shortForecast));
+    // Pick worst fog condition
+    const fogPriority = { 'fog-none': 0, 'fog-low': 1, 'fog-medium': 2, 'fog-high': 3 };
+    const worstFog = fogEntries.reduce((a, b) => fogPriority[a.cls] >= fogPriority[b.cls] ? a : b);
+
+    document.getElementById('wx-wind').textContent = `${maxWind} mph ${windDir}`;
+    document.getElementById('wx-temp').textContent = `${avgTemp}°F`;
+    document.getElementById('wx-precip').textContent = `${maxPrecip}%`;
+
+    const fogEl = document.getElementById('wx-fog');
+    fogEl.textContent = worstFog.label;
+    fogEl.className = `wx-value ${worstFog.cls}`;
+
+    // Show time window
+    const fmt = d => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    document.getElementById('weather-window').textContent =
+      `${fmt(now)} – ${fmt(cutoff)}`;
+  }
+
+  async function fetchWeather() {
+    try {
+      if (!wxGridUrl) {
+        const ptRes = await fetch(
+          `https://api.weather.gov/points/${WX_LAT},${WX_LON}`,
+          { headers: { 'User-Agent': 'MailboatSchedule/1.0 (cranberryisles@example.com)' } }
+        );
+        const ptData = await ptRes.json();
+        wxGridUrl = ptData.properties.forecastHourly;
+      }
+
+      const fRes = await fetch(wxGridUrl,
+        { headers: { 'User-Agent': 'MailboatSchedule/1.0 (cranberryisles@example.com)' } }
+      );
+      const fData = await fRes.json();
+      wxHourlyPeriods = fData.properties.periods;
+
+      const hrs = parseInt(document.getElementById('weather-hour-select').value);
+      renderWeather(hrs);
+    } catch(e) {
+      document.getElementById('weather-error').textContent = 'Weather unavailable — check connection.';
+    }
+  }
+
+  // Re-render (no new fetch) when user changes hour selector
+  document.getElementById('weather-hour-select').addEventListener('change', () => {
+    const hrs = parseInt(document.getElementById('weather-hour-select').value);
+    if (wxHourlyPeriods) renderWeather(hrs);
+    else fetchWeather();
+  });
+
+  // Fetch on load and refresh every 30 minutes
+  fetchWeather();
+  setInterval(fetchWeather, 30 * 60 * 1000);
+</script>
+</body>
+</html>
