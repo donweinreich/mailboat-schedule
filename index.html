@@ -358,7 +358,7 @@
 </div>
 
 <header>
-  <h1>Mailboat (beta v0.24)</h1>
+  <h1>Mailboat (beta v0.25)</h1>
   <p>Daily Timetable · Northeast Harbor</p>
 </header>
 
@@ -384,8 +384,9 @@
     cursor: pointer;
     margin-bottom: 0.8rem;
     display: block;
-  ">⛅ Hide Weather & Tides</button>
+  ">⛅ Show Weather & Tides</button>
 
+  <!--
   <button id="sutton-test-btn" onclick="toggleSuttonTest()" style="
     background: none;
     border: 1px solid var(--slate);
@@ -400,12 +401,41 @@
     margin-bottom: 0.8rem;
     display: block;
   ">Ⓢ Test Sutton Conflict</button>
+  -->
 
   <!-- ── WEATHER WIDGET ── -->
-  <div id="weather-card">
-    <div class="next-label">
-      <span><span class="wx-icon">⛅</span> Forecast · Cranberry Isles</span>
-      <select id="weather-hour-select">
+  <div id="weather-card" style="display:none;">
+    <div class="next-label" style="margin-bottom:0.8rem;">
+      <span><span class="wx-icon">⛅</span> Weather · Cranberry Isles</span>
+    </div>
+    <!-- Current conditions from KBHB Bar Harbor -->
+    <div style="font-size:0.55rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--gold); margin-bottom:0.4rem; border-bottom:1px solid var(--slate); padding-bottom:0.3rem;">
+      Current Conditions · Bar Harbor Airport
+    </div>
+    <div id="obs-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem 1rem; margin-bottom:1rem;">
+      <div class="wx-item">
+        <div class="wx-label">Wind</div>
+        <div class="wx-value" id="obs-wind">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Temperature</div>
+        <div class="wx-value" id="obs-temp">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Visibility</div>
+        <div class="wx-value" id="obs-vis">—</div>
+      </div>
+      <div class="wx-item">
+        <div class="wx-label">Conditions</div>
+        <div class="wx-value" id="obs-sky">—</div>
+      </div>
+    </div>
+    <div id="obs-age" style="font-size:0.6rem; color:var(--foam); opacity:0.5; margin-bottom:0.8rem; font-style:italic;"></div>
+
+    <!-- Hourly forecast from NOAA -->
+    <div style="font-size:0.55rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--gold); margin-bottom:0.4rem; border-bottom:1px solid var(--slate); padding-bottom:0.3rem; display:flex; justify-content:space-between; align-items:center;">
+      <span>Forecast · Cranberry Isles</span>
+      <select id="weather-hour-select" style="background:var(--navy); color:var(--gold); border:1px solid var(--slate); border-radius:3px; font-family:'IBM Plex Mono',monospace; font-size:0.65rem; padding:0.15rem 0.3rem; cursor:pointer; letter-spacing:0.08em; text-transform:none;">
         <option value="1" selected>Next 1 hr</option>
         <option value="2">2 hrs ahead</option>
         <option value="3">3 hrs ahead</option>
@@ -927,6 +957,58 @@
     });
   }, 1000);
 
+  // ── CURRENT CONDITIONS from KBHB Bar Harbor Airport ──
+  async function fetchObservations() {
+    try {
+      const res = await fetch(
+        'https://api.weather.gov/stations/KBHB/observations/latest',
+        { headers: { 'User-Agent': 'MailboatSchedule/1.0 (cranberryisles@example.com)' } }
+      );
+      const data = await res.json();
+      const p = data.properties;
+
+      // Wind
+      const windSpeedMs = p.windSpeed?.value;
+      const windGustMs  = p.windGust?.value;
+      const windDir     = p.windDirection?.value;
+      const windMph     = windSpeedMs != null ? Math.round(windSpeedMs * 2.237) : null;
+      const gustMph     = windGustMs  != null ? Math.round(windGustMs  * 2.237) : null;
+      const compass     = windDir != null ? degToCompass(windDir) : '';
+      let windStr = windMph != null ? `${windMph} mph ${compass}` : '—';
+      if (gustMph && gustMph > windMph) windStr += ` G${gustMph}`;
+      document.getElementById('obs-wind').textContent = windStr;
+
+      // Temperature
+      const tempC = p.temperature?.value;
+      const tempF = tempC != null ? Math.round(tempC * 9/5 + 32) : null;
+      document.getElementById('obs-temp').textContent = tempF != null ? `${tempF}°F` : '—';
+
+      // Visibility
+      const visM = p.visibility?.value;
+      const visMi = visM != null ? (visM / 1609.34).toFixed(1) : null;
+      document.getElementById('obs-vis').textContent = visMi != null ? `${visMi} mi` : '—';
+
+      // Sky / present weather
+      const wx = p.presentWeather?.map(w => w.weather).filter(Boolean).join(', ');
+      const sky = p.textDescription || wx || '—';
+      document.getElementById('obs-sky').textContent = sky;
+
+      // Observation age
+      const obsTime = p.timestamp ? new Date(p.timestamp) : null;
+      if (obsTime) {
+        const ageMin = Math.round((Date.now() - obsTime.getTime()) / 60000);
+        document.getElementById('obs-age').textContent =
+          `Observed ${ageMin} min ago at Bar Harbor Airport`;
+      }
+    } catch(e) {
+      document.getElementById('obs-wind').textContent = '—';
+      document.getElementById('obs-temp').textContent = '—';
+      document.getElementById('obs-vis').textContent  = '—';
+      document.getElementById('obs-sky').textContent  = 'Unavailable';
+      document.getElementById('obs-age').textContent  = 'Bar Harbor observations unavailable';
+    }
+  }
+
   // ── WEATHER WIDGET ──
   // Lat/lon for ZIP 04625 (Cranberry Isles, ME)
   const WX_LAT = 44.2471;
@@ -1057,7 +1139,9 @@
   // Fetch weather and compute sun times on load; refresh weather every 30 min
   updateSunTimes();
   fetchWeather();
+  fetchObservations();
   setInterval(fetchWeather, 30 * 60 * 1000);
+  setInterval(fetchObservations, 10 * 60 * 1000); // observations refresh every 10 min
   setInterval(updateSunTimes, 60 * 60 * 1000); // recalc sun times hourly
 
   // ── TIDE WIDGET — Southwest Harbor, ME ──
