@@ -275,6 +275,26 @@
     .wx-value.fog-low     { color: var(--gold); }
     .wx-value.fog-medium  { color: rgb(255,140,0); }
     .wx-value.fog-high    { color: rgb(207,16,32); }
+
+    /* NO SUTTON Ⓢ symbol */
+    .sutton-symbol {
+      color: rgb(207,16,32);
+      font-weight: bold;
+      position: relative;
+      display: inline-block;
+      z-index: 0;
+    }
+    .sutton-symbol::before {
+      content: '✕';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1.4);
+      color: #ccc;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: -1;
+    }
     #wx-tide-arrow.rising  { color: #4cbb7f; }
     #wx-tide-arrow.falling { color: rgb(207,16,32); }
     #weather-window {
@@ -338,7 +358,7 @@
 </div>
 
 <header>
-  <h1>Mailboat (beta v0.23)</h1>
+  <h1>Mailboat (beta v0.24)</h1>
   <p>Daily Timetable · Northeast Harbor</p>
 </header>
 
@@ -379,7 +399,7 @@
     cursor: pointer;
     margin-bottom: 0.8rem;
     display: block;
-  ">⛔ Test Sutton Conflict</button>
+  ">Ⓢ Test Sutton Conflict</button>
 
   <!-- ── WEATHER WIDGET ── -->
   <div id="weather-card">
@@ -387,11 +407,11 @@
       <span><span class="wx-icon">⛅</span> Forecast · Cranberry Isles</span>
       <select id="weather-hour-select">
         <option value="1" selected>Next 1 hr</option>
-        <option value="2">Next 2 hr</option>
-        <option value="3">Next 3 hr</option>
-        <option value="4">Next 4 hr</option>
-        <option value="5">Next 5 hr</option>
-        <option value="6">Next 6 hr</option>
+        <option value="2">2 hrs ahead</option>
+        <option value="3">3 hrs ahead</option>
+        <option value="4">4 hrs ahead</option>
+        <option value="5">5 hrs ahead</option>
+        <option value="6">6 hrs ahead</option>
       </select>
     </div>
     <div id="weather-grid">
@@ -429,11 +449,11 @@
         <div style="font-size:0.65rem; color:var(--foam); opacity:0.6; margin-top:0.2rem;" id="wx-tide-next"></div>
       </div>
       <div class="wx-item">
-        <div class="wx-label" style="color:rgb(255,140,0);">⛔ No Sutton</div>
+        <div class="wx-label"><span class="sutton-symbol">Ⓢ</span> No Sutton</div>
         <div class="wx-value" id="wx-sutton-1" style="font-size:0.85rem;">—</div>
       </div>
       <div class="wx-item">
-        <div class="wx-label" style="color:rgb(255,140,0);">⛔ No Sutton</div>
+        <div class="wx-label"><span class="sutton-symbol">Ⓢ</span> No Sutton</div>
         <div class="wx-value" id="wx-sutton-2" style="font-size:0.85rem;">—</div>
       </div>
     </div>
@@ -649,13 +669,13 @@
     const result = suttonWindows.some(w => {
       // Case 1: departure falls inside the window
       if (depAbsMs >= w.start.getTime() && depAbsMs <= w.end.getTime()) {
-        console.log(`⛔ ${depTime} inside window ${w.start.toLocaleTimeString()}–${w.end.toLocaleTimeString()}`);
+        console.log(`Ⓢ ${depTime} inside window ${w.start.toLocaleTimeString()}–${w.end.toLocaleTimeString()}`);
         return true;
       }
       // Case 2: window starts within 10 min after departure
       const deltaMs = w.start.getTime() - depAbsMs;
       if (deltaMs >= 0 && deltaMs <= 10 * 60 * 1000) {
-        console.log(`⛔ ${depTime} window starts ${Math.round(deltaMs/60000)}min after departure`);
+        console.log(`Ⓢ ${depTime} window starts ${Math.round(deltaMs/60000)}min after departure`);
         return true;
       }
       return false;
@@ -664,7 +684,7 @@
   }
 
   // ── SUTTON TEST MODE ──
-  // Injects a fake NO SUTTON window around the NEXT upcoming departure so ⛔ is visible immediately.
+  // Injects a fake NO SUTTON window around the NEXT upcoming departure so Ⓢ is visible immediately.
   let suttonTestMode = false;
 
   function toggleSuttonTest() {
@@ -682,14 +702,15 @@
           { start: new Date(depAbsMs + 6 * 3600000), end: new Date(depAbsMs + 10 * 3600000) },
         ];
       }
-      btn.textContent = '⛔ Test ON — tap to clear';
+      btn.textContent = 'Ⓢ Test ON — tap to clear';
       btn.style.borderColor = 'rgb(207,16,32)';
       btn.style.color = 'rgb(207,16,32)';
     } else {
       suttonWindows = [];
-      btn.textContent = '⛔ Test Sutton Conflict';
+      btn.textContent = 'Ⓢ Test Sutton Conflict';
       btn.style.borderColor = '';
       btn.style.color = '';
+      updateTide(); // immediately re-fetch real tide data rather than waiting for 6-min interval
     }
     update();
   }
@@ -724,7 +745,7 @@
       const suttonCell = document.getElementById(`sutton-${i}`);
       if (suttonCell && row.type.startsWith('Depart')) {
         const depSecs = parseTime(row.time) * 60;
-        suttonCell.textContent = isSuttonConflict(depSecs) ? '⛔' : '';
+        suttonCell.innerHTML = isSuttonConflict(depSecs) ? '<span class="sutton-symbol">Ⓢ</span>' : '';
       }
     });
 
@@ -777,7 +798,7 @@
       nextEl.style.color = '';
 
       const deltaSecs = active.secs - nowSecs; // negative during grace
-      const suttonFlag = isSuttonConflict(active.secs) ? ' ⛔' : '';
+      const suttonFlag = isSuttonConflict(active.secs) ? ' <span class="sutton-symbol">Ⓢ</span>' : '';
 
       if (isGrace) {
         const elapsed = nowSecs - active.secs;
@@ -785,7 +806,7 @@
         countdownEl.textContent = `+${elapsedStr}`;
         setBlinkClass(nextEl,    'blink-grace', 'rgb(255, 180, 240)');
         setBlinkClass(countdownEl, 'blink-grace', 'rgb(255, 180, 240)');
-        detailEl.textContent = `${active.from} → ${active.to}${suttonFlag}`;
+        detailEl.innerHTML = `${active.from} → ${active.to}${suttonFlag}`;
       } else {
         if (deltaSecs <= 5 * 60) {
           countdownEl.textContent = `in ${formatDeltaSecsHMS(deltaSecs)}`;
@@ -800,7 +821,7 @@
           setBlinkClass(nextEl,    null, '#fff');
           setBlinkClass(countdownEl, null, '#fff');
         }
-        detailEl.textContent = `${active.from} → ${active.to}${suttonFlag}`;
+        detailEl.innerHTML = `${active.from} → ${active.to}${suttonFlag}`;
       }
     } else {
       nextEl.textContent = 'No more ferries today';
@@ -932,11 +953,12 @@
     if (!periods) return;
 
     const now = new Date();
-    // Find periods that fall within the next `hours` hours
-    const cutoff = new Date(now.getTime() + hours * 3600 * 1000);
+    // For "Next 1 hr" show now→+1hr; for "X hrs ahead" show (now+X-1hr)→(now+X hr)
+    const windowStart = hours === 1 ? now : new Date(now.getTime() + (hours - 1) * 3600 * 1000);
+    const windowEnd   = new Date(windowStart.getTime() + 3600 * 1000);
     const relevant = periods.filter(p => {
       const start = new Date(p.startTime);
-      return start >= now && start < cutoff;
+      return start >= windowStart && start < windowEnd;
     });
 
     if (relevant.length === 0) {
@@ -966,10 +988,9 @@
     fogEl.textContent = worstFog.label;
     fogEl.className = `wx-value ${worstFog.cls}`;
 
-    // Show time window
+    // Show 1-hour window starting at the selected offset
     const fmt = d => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    document.getElementById('weather-window').textContent =
-      `${fmt(now)} – ${fmt(cutoff)}`;
+    document.getElementById('weather-window').textContent = `${fmt(windowStart)} – ${fmt(windowEnd)}`;
   }
 
   // ── SUNRISE / SUNSET (NOAA algorithm for lat/lon) ──
