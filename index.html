@@ -507,7 +507,7 @@
     <select id="schedule-select" style="background:var(--navy); color:var(--gold); border:1px solid var(--slate); border-radius:3px; font-family:'IBM Plex Mono',monospace; font-size:0.65rem; padding:0.15rem 0.3rem; cursor:pointer; letter-spacing:0.08em;">
       <option value="summer">Summer · May 3 – Sep 6</option>
       <option value="springfall">Spring &amp; Fall · May 11–Jun 14 &amp; Sep 7–Oct 11</option>
-      <option value="winter">Winter · Oct 12, 2026 – May 10, 2027</option>
+      <option value="winter">Winter · Oct 12 – May 10</option>
     </select>
   </div>
   <table>
@@ -532,6 +532,7 @@
     summer: {
       label: 'Summer',
       dates: 'May 3 – Sep 6, 2026',
+      ranges: [ { startMD: [5, 3],  endMD: [9, 6] } ],
       rows: [
         { time: "7:30am",  type: "Depart", from: "Northeast Harbor", to: "Islesford" },
         { time: "8:00am",  type: "Depart", from: "Islesford",        to: "Cranberry" },
@@ -566,6 +567,10 @@
     springfall: {
       label: 'Spring & Fall',
       dates: 'May 11 – Jun 14 & Sep 7 – Oct 11, 2026',
+      ranges: [
+        { startMD: [5, 11], endMD: [6, 14] },
+        { startMD: [9, 7],  endMD: [10, 11] }
+      ],
       rows: [
         { time: "7:30am",  type: "Depart", from: "Northeast Harbor", to: "Cranberry" },
         { time: "7:55am",  type: "Depart", from: "Cranberry",        to: "Islesford" },
@@ -592,6 +597,7 @@
     winter: {
       label: 'Winter',
       dates: 'Oct 12, 2026 – May 10, 2027',
+      ranges: [ { startMD: [10, 12], endMD: [5, 10], wraps: true } ],
       rows: [
         { time: "7:30am",  type: "Depart",           from: "Northeast Harbor", to: "Cranberry" },
         { time: "7:55am",  type: "Depart",           from: "Cranberry",        to: "Islesford" },
@@ -612,7 +618,36 @@
     }
   };
 
-  let schedule = schedules.summer.rows;
+  // ── DETERMINE TODAY'S DEFAULT SCHEDULE ──
+  function monthDayInRange(month, day, range) {
+    const md = month * 100 + day; // e.g. May 3 -> 503
+    const startMD = range.startMD[0] * 100 + range.startMD[1];
+    const endMD   = range.endMD[0]   * 100 + range.endMD[1];
+    if (range.wraps) {
+      // Range wraps across the new year (e.g. Oct 12 -> May 10)
+      return md >= startMD || md <= endMD;
+    }
+    return md >= startMD && md <= endMD;
+  }
+
+  function getDefaultScheduleKey() {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    // Priority order matters: Spring & Fall windows are carved out of the broader
+    // Summer date range printed on the schedule, so check them first.
+    const priority = ['springfall', 'summer', 'winter'];
+    for (const key of priority) {
+      const ranges = schedules[key].ranges || [];
+      if (ranges.some(r => monthDayInRange(month, day, r))) {
+        return key;
+      }
+    }
+    return 'summer'; // fallback if no range matches
+  }
+
+  const defaultScheduleKey = getDefaultScheduleKey();
+  let schedule = schedules[defaultScheduleKey].rows;
 
   function buildTable() {
     const tbody = document.getElementById('schedule-body');
@@ -635,6 +670,7 @@
     });
   }
 
+  document.getElementById('schedule-select').value = defaultScheduleKey;
   buildTable();
 
   document.getElementById('schedule-select').addEventListener('change', function() {
